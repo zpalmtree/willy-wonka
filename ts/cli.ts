@@ -3,7 +3,7 @@ import { program } from 'commander';
 import * as anchor from '@project-serum/anchor';
 import idl from "./idl/candy_machine.json";
 import {Idl, Program, ProgramAccount} from "@project-serum/anchor";
-import fs from "fs";
+import fs from "fs/promises";
 import {MintLayout, Token, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, AccountInfo} from '@solana/spl-token';
 import {
     Blockhash,
@@ -49,6 +49,11 @@ const unpackConfigItem = (i: number, data: Buffer) : [string, string] =>{
         );
         const name = fromUTF8Array([...thisSlice.slice(4, 36)]);
         const uri = fromUTF8Array([...thisSlice.slice(40, 240)]);
+
+        return [
+            name.replace(/\u0000/g, ''),
+            uri.replace(/\u0000/g, ''),
+        ];
 
         return [name, uri];
 }
@@ -195,8 +200,10 @@ program.command("search")
     .action(async (pattern, options) => {
         const { keypair, url } = options;
 
+        const key = await fs.readFile(keypair, { encoding: 'utf-8' });
+
         const walletKey = anchor.web3.Keypair.fromSecretKey(
-            new Uint8Array(JSON.parse(fs.readFileSync(keypair).toString())),
+            new Uint8Array(JSON.parse(key)),
         );
 
         const connection = new anchor.web3.Connection(url);
@@ -216,43 +223,88 @@ program.command("search")
         while (configsFetched < configPublicKeys.length) {
             console.log(`Fetching configs ${configsFetched} through ${configsFetched + chunkSize}`);
 
-            const nextConfigBuggers = await connection.getMultipleAccountsInfo(configPublicKeys.slice(configsFetched, chunkSize));
-            configBuffers = [...configBuffers, ...nextConfigBuggers];
+            const accountsToFetch = configPublicKeys.slice(configsFetched, configsFetched + chunkSize);
+
+            const nextConfigBuggers = await connection.getMultipleAccountsInfo(accountsToFetch);
+
             configsFetched += chunkSize;
 
-            const sleepDuration = 1000;
+            for (const config of nextConfigBuggers) {
+                if (config?.data) {
+                    configBuffers.push(config.data);
+                }
+            }
+
+            const sleepDuration = 1;
             console.log(`Sleeping for ${sleepDuration} ms to avoid rate limit`)
             await new Promise(r => setTimeout(r, sleepDuration));
         }
 
-        const configMap = configBuffers.reduce((map, configBuffer) => {
-            if (configBuffer?.data) {
-                const config : any = candyMachineProgram.coder.accounts.decode("Config", configBuffer?.data);
-                map.set(config.data.uuid, configBuffer);
+        const configMap = configBuffers.reduce((map, data) => {
+            try {
+                const config: any = candyMachineProgram.coder.accounts.decode("Config", data);
+
+                const existing = map.get(`${config.authority.toString()}-${config.data.uuid}`);
+
+                if (existing) {
+                    console.log('Duplicate candy machine!');
+                    return map;
+                }
+
+                map.set(`${config.authority.toString()}-${config.data.uuid}`, data);
+            } catch (err) {
+                console.log('Error decoding config data: ' + err);
             }
+
             return map;
         }, new Map());
+
+        const data = [];
 
         for (let candyMachine of candyMachines) {
             const numberOfItems = candyMachine.account.data.itemsAvailable;
             const configuuid = candyMachine.account.config.toBase58().slice(0, 6);
-            const config = configMap.get(configuuid);
+            const config = configMap.get(`${candyMachine.account.authority.toString()}-${configuuid}`);
 
-            if (!config || !config.data) {
+            if (!config) {
                 continue;
             }
 
-            for (let i = 0; i < numberOfItems; i++) {
-                const [name, uri] = unpackConfigItem(i, config.data);
+            for (let i = 0; i < Math.min(numberOfItems, 1); i++) {
+                const [name, uri] = unpackConfigItem(i, config);
 
-                if (name.match(new RegExp(pattern))) {
+                if (name.match(new RegExp(pattern), "i")) {
                     console.log(`Match!`);
                     console.log(`Name: ${name}`);
                     console.log(`Uri: ${uri}`);
                     console.log(`Candy Machine Public Key: ${candyMachine.publicKey.toString()}`);
+
+                    const loadedCandyMachine: any = await candyMachineProgram.account.candyMachine.fetch(
+                        candyMachine.publicKey,
+                    );
+
+                    data.push({
+                        candyAddress: candyMachine.publicKey.toString(),
+                        candyConfig: loadedCandyMachine.config.toString(),
+                        exampleItem: name,
+                        exampleImage: uri,
+                        match: true,
+                    });
+
+                } else {
+                    data.push({
+                        candyAddress: candyMachine.publicKey.toString(),
+                        exampleItem: name,
+                        exampleImage: uri,
+                        match: false,
+                    });
                 }
             }
         }
+
+        const sorted = await data.sort((a, b) => Number(b.match) - Number(a.match));
+
+        await fs.writeFile('machines.json', JSON.stringify(sorted, null, 4), { encoding: 'utf8' });
     });
 
 program.command("wen")
@@ -263,8 +315,10 @@ program.command("wen")
         const { keypair, url } = options;
         const candyMachinePublicKey = new anchor.web3.PublicKey(candyMachinePublicKeyString);
 
+        const key = await fs.readFile(keypair, { encoding: 'utf-8' });
+
         const walletKey = anchor.web3.Keypair.fromSecretKey(
-            new Uint8Array(JSON.parse(fs.readFileSync(keypair).toString())),
+            new Uint8Array(JSON.parse(key)),
         );
 
         const connection = new anchor.web3.Connection(url);
@@ -297,8 +351,10 @@ program.command("mint")
     .action(async (candyMachinePublicKeyString, options) => {
         const { keypair, url } = options;
         const candyMachinePublicKey = new anchor.web3.PublicKey(candyMachinePublicKeyString);
+        const key = await fs.readFile(keypair, { encoding: 'utf-8' });
+
         const walletKey = anchor.web3.Keypair.fromSecretKey(
-            new Uint8Array(JSON.parse(fs.readFileSync(keypair).toString())),
+            new Uint8Array(JSON.parse(key)),
         );
 
         const connection = new anchor.web3.Connection(url);

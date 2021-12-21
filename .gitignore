@@ -2,3 +2,4 @@
 ts/build
 ts/node_modules
 ts/yarn.lock
+machines.json

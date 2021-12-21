@@ -4,7 +4,10 @@
   "bin": {
     "willy-wonka": "./build/cli.js"
   },
-  "scripts": {},
+  "scripts": {
+    "build": "./node_modules/.bin/tsc",
+    "start": "node build/cli.js"
+  },
   "author": "crispheaney",
   "license": "ISC",
   "main": "cli.js",
@@ -15,5 +18,8 @@
     "@types/node": "^16.7.10",
     "cli-color": "^2.0.0",
     "commander": "^8.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^4.5.4"
   }
 }
