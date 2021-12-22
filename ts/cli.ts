@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { program } from 'commander';
 import * as anchor from '@project-serum/anchor';
-import idl from "./idl/candy_machine.json";
-import {Idl, Program, ProgramAccount} from "@project-serum/anchor";
+import { Idl, Program, ProgramAccount } from "@project-serum/anchor";
 import fs from "fs/promises";
 import {MintLayout, Token, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, AccountInfo} from '@solana/spl-token';
 import {
@@ -13,49 +12,116 @@ import {
     PublicKey,
     SystemProgram,
     SYSVAR_RENT_PUBKEY, Transaction,
-    TransactionInstruction
+    TransactionInstruction,
+    LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 
 program.version("0.1.0");
 
-const candyMachineProgramID = new anchor.web3.PublicKey(
+const candyMachineV1 = new PublicKey(
     'cndyAnrLdpjq1Ssp1z8xxDsB8dxe7u4HL5Nxi2K5WXZ',
+);
+
+const candyMachineV2 = new PublicKey(
+    'cndy3Z4yapfJBmL3ShUp5exZKqR3z33thTzeNMm2gRZ'
 );
 
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
     'metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s',
 );
 
-const configArrayStart =
-    32 + // authority
-    4 +
-    6 + // uuid + u32 len
-    4 +
-    10 + // u32 len + symbol
-    2 + // seller fee basis points
-    1 +
-    4 +
-    5 * 34 + // optional + u32 len + actual vec
-    8 + //max supply
-    1 + //is mutable
-    1 + // retain authority
-    4; // max number of lines;
-const configLineSize = 4 + 32 + 4 + 200;
+export const MAX_NAME_LENGTH = 32;
+export const MAX_URI_LENGTH = 200;
+export const MAX_SYMBOL_LENGTH = 10;
+export const MAX_CREATOR_LEN = 32 + 1 + 1;
+export const MAX_CREATOR_LIMIT = 5;
 
-const unpackConfigItem = (i: number, data: Buffer) : [string, string] =>{
-        const thisSlice = data.slice(
-            configArrayStart + 4 + configLineSize * i,
-            configArrayStart + 4 + configLineSize * (i + 1),
-        );
-        const name = fromUTF8Array([...thisSlice.slice(4, 36)]);
-        const uri = fromUTF8Array([...thisSlice.slice(40, 240)]);
+const CONFIG_ARRAY_START =
+  32 + // authority
+  4 +
+  6 + // uuid + u32 len
+  4 +
+  10 + // u32 len + symbol
+  2 + // seller fee basis points
+  1 +
+  4 +
+  5 * 34 + // optional + u32 len + actual vec
+  8 + //max supply
+  1 + //is mutable
+  1 + // retain authority
+  4; // max number of lines;
 
-        return [
-            name.replace(/\u0000/g, ''),
-            uri.replace(/\u0000/g, ''),
-        ];
+const CONFIG_ARRAY_START_V2 =
+  8 + // key
+  32 + // authority
+  32 + //wallet
+  33 + // token mint
+  4 +
+  6 + // uuid
+  8 + // price
+  8 + // items available
+  9 + // go live
+  10 + // end settings
+  4 +
+  MAX_SYMBOL_LENGTH + // u32 len + symbol
+  2 + // seller fee basis points
+  4 +
+  MAX_CREATOR_LIMIT * MAX_CREATOR_LEN + // optional + u32 len + actual vec
+  8 + //max supply
+  1 + // is mutable
+  1 + // retain authority
+  1 + // option for hidden setting
+  4 +
+  MAX_NAME_LENGTH + // name length,
+  4 +
+  MAX_URI_LENGTH + // uri length,
+  32 + // hash
+  4 + // max number of lines;
+  8 + // items redeemed
+  1 + // whitelist option
+  1 + // whitelist mint mode
+  1 + // allow presale
+  9 + // discount price
+  32 + // mint key for whitelist
+  1 +
+  32 +
+  1; // gatekeeper
 
-        return [name, uri];
+export const CONFIG_LINE_SIZE_V2 = 4 + 32 + 4 + 200;
+export const CONFIG_LINE_SIZE = 4 + 32 + 4 + 200;
+
+function formatSOL(amount: number) {
+    return `${(amount / LAMPORTS_PER_SOL).toFixed(2)} SOL`;
+}
+
+function unpackConfigItemV1(i: number, data: Buffer): [string, string] {
+    const thisSlice = data.slice(
+        CONFIG_ARRAY_START + 4 + CONFIG_LINE_SIZE * i,
+        CONFIG_ARRAY_START + 4 + CONFIG_LINE_SIZE * (i + 1),
+    );
+
+    const name = fromUTF8Array([...thisSlice.slice(4, 36)]);
+    const uri = fromUTF8Array([...thisSlice.slice(40, 240)]);
+
+    return [
+        name.replace(/\u0000/g, ''),
+        uri.replace(/\u0000/g, ''),
+    ];
+}
+
+function unpackConfigItemV2(i: number, data: Buffer): [string, string] {
+    const thisSlice = data.slice(
+        CONFIG_ARRAY_START_V2 + 4 + CONFIG_LINE_SIZE_V2 * i,
+        CONFIG_ARRAY_START_V2 + 4 + CONFIG_LINE_SIZE_V2 * (i + 1),
+    );
+
+    const name = fromUTF8Array([...thisSlice.slice(2, 34)]);
+    const uri = fromUTF8Array([...thisSlice.slice(40, 240)]);
+
+    return [
+        name.replace(/\u0000/g, ''),
+        uri.replace(/\u0000/g, ''),
+    ];
 }
 
 export function fromUTF8Array(data: number[]) {
@@ -193,6 +259,158 @@ interface BlockhashAndFeeCalculator {
     feeCalculator: FeeCalculator;
 }
 
+async function loadCandyProgram(
+    provider: anchor.Provider,
+    programId: PublicKey) {
+
+    const idl = await anchor.Program.fetchIdl(
+        programId,
+        provider,
+    );
+
+    if (!idl) {
+        throw new Error(`Failed to fetch IDL for ${programId.toString()}!`);
+    }
+
+    const program = new anchor.Program(idl, programId, provider);
+
+    return program;
+}
+
+async function searchCandyMachine(
+    programId: PublicKey,
+    keypair: Keypair,
+    connection: Connection,
+    walletWrapper: anchor.Wallet,
+    provider: anchor.Provider,
+    pattern: string,
+    candyVersion: number) {
+
+    const candyProgram = await loadCandyProgram(
+        provider,
+        programId,
+    );
+
+    const candyMachines = await candyProgram.account.candyMachine.all();
+
+    const configPublicKeys = candyMachines.map(candyMachine => candyMachine?.account?.config ? candyMachine.account.config : candyMachine.publicKey);
+
+    let configBuffers : any[] = [];
+    let configsFetched = 0;
+    const chunkSize = 99;
+
+    console.log(`Found ${configPublicKeys.length} V${candyVersion} candy machines...`);
+
+    while (configsFetched < configPublicKeys.length) {
+        console.log(`Fetching configs ${configsFetched} through ${configsFetched + chunkSize}`);
+
+        const accountsToFetch = configPublicKeys.slice(configsFetched, configsFetched + chunkSize);
+
+        while (true) {
+            try {
+                const nextConfigBuggers = await connection.getMultipleAccountsInfo(accountsToFetch);
+
+                configsFetched += chunkSize;
+
+                for (const config of nextConfigBuggers) {
+                    if (config?.data) {
+                        configBuffers.push(config.data);
+                    }
+                }
+
+                break;
+            } catch (err) {
+                console.log((err as any).toString());
+                continue;
+            }
+        }
+    }
+
+    const configMap = configBuffers.reduce((map, data) => {
+        try {
+            const field = candyVersion === 1
+                ? 'Config'
+                : 'CandyMachine';
+
+            const config: any = candyProgram.coder.accounts.decode(field, data);
+
+            const existing = map.get(`${config.authority.toString()}-${config.data.uuid}`);
+
+            if (existing) {
+                console.log('Duplicate candy machine!');
+                return map;
+            }
+
+            map.set(`${config.authority.toString()}-${config.data.uuid}`, data);
+        } catch (err) {
+            console.log('Error decoding config data: ' + err);
+        }
+
+        return map;
+    }, new Map());
+
+    const data = [];
+
+    const unpackFunc = candyVersion === 2
+        ? unpackConfigItemV2
+        : unpackConfigItemV1;
+
+    for (let candyMachine of candyMachines) {
+        const numberOfItems = candyMachine.account.data.itemsAvailable.toString();
+        const price = candyMachine.account.data.price.toString();
+        const date = candyMachine.account.data.goLiveData
+            ? new Date(candyMachine.account.data.goLiveData.toString() * 1000)
+            : 'Not Set';
+
+        const config = configMap.get(`${candyMachine.account.authority.toString()}-${candyMachine.account.data.uuid}`);
+
+        if (!config) {
+            continue;
+        }
+
+        for (let i = 0; i < Math.min(numberOfItems, 1); i++) {
+            const [name, uri] = unpackFunc(i, config);
+
+            const obj = {
+                candyAddress: candyMachine.publicKey.toString(),
+                exampleItem: name,
+                exampleMetadata: uri,
+                match: false,
+                candyMachineVersion: candyVersion,
+                items: numberOfItems,
+                price: formatSOL(price),
+                date,
+                candyConfig: undefined,
+                treasury: undefined,
+            };
+
+            if (name.match(new RegExp(pattern, 'i'))) {
+                console.log(`Match!`);
+                console.log(`Name: ${name}`);
+                console.log(`Uri: ${uri}`);
+                console.log(`Candy Machine Public Key: ${candyMachine.publicKey.toString()}`);
+
+                const loadedCandyMachine: any = await candyProgram.account.candyMachine.fetch(
+                    candyMachine.publicKey,
+                );
+
+                obj.candyConfig = loadedCandyMachine.authority.toString();
+                obj.match = true;
+                obj.treasury = loadedCandyMachine.wallet.toString();
+            } else {
+                obj.match = false;
+            }
+
+            data.push(obj);
+        }
+    }
+
+    return {
+        data,
+        count: candyMachines.length,
+    };
+}
+
 program.command("search")
     .argument('<pattern>', "The pattern used to identify candy machine configs")
     .option('-k, --keypair <path>', 'Solana wallet')
@@ -206,106 +424,56 @@ program.command("search")
             new Uint8Array(JSON.parse(key)),
         );
 
-        const connection = new anchor.web3.Connection(url);
         const walletWrapper = new anchor.Wallet(walletKey);
+
+        const connection = new anchor.web3.Connection(url);
         const provider = new anchor.Provider(connection, walletWrapper, {
             preflightCommitment: 'recent',
         });
-        const candyMachineProgram = new Program(idl as Idl, candyMachineProgramID, provider);
 
-        const candyMachines = await candyMachineProgram.account.candyMachine.all();
-        const configPublicKeys = candyMachines.map(candyMachine => candyMachine.account.config);
+        const v1Machines = await searchCandyMachine(
+            candyMachineV1,
+            keypair,
+            connection,
+            walletWrapper,
+            provider,
+            pattern,
+            1,
+        );
 
-        let configBuffers : any[] = [];
-        let configsFetched = 0;
-        const chunkSize = 99;
-        console.log(`Number of configs ${configPublicKeys.length}`);
-        while (configsFetched < configPublicKeys.length) {
-            console.log(`Fetching configs ${configsFetched} through ${configsFetched + chunkSize}`);
+        const v2Machines = await searchCandyMachine(
+            candyMachineV2,
+            keypair,
+            connection,
+            walletWrapper,
+            provider,
+            pattern,
+            2,
+        );
 
-            const accountsToFetch = configPublicKeys.slice(configsFetched, configsFetched + chunkSize);
-
-            const nextConfigBuggers = await connection.getMultipleAccountsInfo(accountsToFetch);
-
-            configsFetched += chunkSize;
-
-            for (const config of nextConfigBuggers) {
-                if (config?.data) {
-                    configBuffers.push(config.data);
-                }
-            }
-
-            const sleepDuration = 1;
-            console.log(`Sleeping for ${sleepDuration} ms to avoid rate limit`)
-            await new Promise(r => setTimeout(r, sleepDuration));
-        }
-
-        const configMap = configBuffers.reduce((map, data) => {
-            try {
-                const config: any = candyMachineProgram.coder.accounts.decode("Config", data);
-
-                const existing = map.get(`${config.authority.toString()}-${config.data.uuid}`);
-
-                if (existing) {
-                    console.log('Duplicate candy machine!');
-                    return map;
-                }
-
-                map.set(`${config.authority.toString()}-${config.data.uuid}`, data);
-            } catch (err) {
-                console.log('Error decoding config data: ' + err);
-            }
-
-            return map;
-        }, new Map());
-
-        const data = [];
-
-        for (let candyMachine of candyMachines) {
-            const numberOfItems = candyMachine.account.data.itemsAvailable;
-            const configuuid = candyMachine.account.config.toBase58().slice(0, 6);
-            const config = configMap.get(`${candyMachine.account.authority.toString()}-${configuuid}`);
-
-            if (!config) {
-                continue;
-            }
-
-            for (let i = 0; i < Math.min(numberOfItems, 1); i++) {
-                const [name, uri] = unpackConfigItem(i, config);
-
-                if (name.match(new RegExp(pattern), "i")) {
-                    console.log(`Match!`);
-                    console.log(`Name: ${name}`);
-                    console.log(`Uri: ${uri}`);
-                    console.log(`Candy Machine Public Key: ${candyMachine.publicKey.toString()}`);
-
-                    const loadedCandyMachine: any = await candyMachineProgram.account.candyMachine.fetch(
-                        candyMachine.publicKey,
-                    );
-
-                    data.push({
-                        candyAddress: candyMachine.publicKey.toString(),
-                        candyConfig: loadedCandyMachine.config.toString(),
-                        exampleItem: name,
-                        exampleImage: uri,
-                        match: true,
-                    });
-
-                } else {
-                    data.push({
-                        candyAddress: candyMachine.publicKey.toString(),
-                        exampleItem: name,
-                        exampleImage: uri,
-                        match: false,
-                    });
-                }
-            }
-        }
-
-        const sorted = await data.sort((a, b) => Number(b.match) - Number(a.match));
+        const sorted = await v1Machines.data.concat(v2Machines.data).sort(sortData);
 
         await fs.writeFile('machines.json', JSON.stringify(sorted, null, 4), { encoding: 'utf8' });
     });
+
+function sortData(a: any, b: any) {
+    const aNum = Number(a.match);
+    const bNum = Number(b.match);
+
+    if (aNum !== bNum) {
+        return bNum - aNum;
+    }
+
+    if (a.candyMachineVersion !== b.candyMachineVersion) {
+        return b.candyMachineVersion - a.candyMachineVersion;
+    }
+
+    if (a.exampleItem !== b.exampleItem) {
+        return a.exampleItem.localeCompare(b.exampleItem);
+    }
+
+    return b.price.localeCompare(a.price.localeCompare);
+}
 
 program.command("wen")
     .argument('<candy-machine>', "Candy machine account to fetch")
@@ -326,9 +494,10 @@ program.command("wen")
         const provider = new anchor.Provider(connection, walletWrapper, {
             preflightCommitment: 'recent',
         });
-        const candyMachineProgram = new Program(idl as Idl, candyMachineProgramID, provider);
 
-        const candyMachine : any = await candyMachineProgram.account.candyMachine.fetch(
+        const candyV1Program = await loadCandyProgram(provider, candyMachineV1);
+
+        const candyMachine : any = await candyV1Program.account.candyMachine.fetch(
             candyMachinePublicKey
         );
 
@@ -362,9 +531,9 @@ program.command("mint")
         const provider = new anchor.Provider(connection, walletWrapper, {
             preflightCommitment: 'recent',
         });
-        const candyMachineProgram = new Program(idl as Idl, candyMachineProgramID, provider);
+        const candyV1Program = await loadCandyProgram(provider, candyMachineV1);
 
-        const candyMachine : any = await candyMachineProgram.account.candyMachine.fetch(
+        const candyMachine : any = await candyV1Program.account.candyMachine.fetch(
             candyMachinePublicKey
         );
 
@@ -396,7 +565,7 @@ program.command("mint")
         const config : anchor.web3.PublicKey = candyMachine.config;
         const token = await getTokenWallet(walletKey.publicKey, mint.publicKey);
         const mintNFT = async () : Promise<string> => {
-            return await candyMachineProgram.rpc.mintNft({
+            return await candyV1Program.rpc.mintNft({
                 accounts: {
                     config: config,
                     candyMachine: candyMachinePublicKey,
