@@ -1,26 +1,16 @@
-### Purpose
-
 Mint candy machine NFTs from your CLI. Use your preferred rpc provider. Avoid rage quitting because the candy machine GUI fails.
 
-### Installation
+## Setup
 
-```shell
-cd ts
-yarn
-tsc
-npm link
-```
+* `yarn install`
+* `yarn build`
 
-### Use
-1) Find the public key for the candy machine you want to mint
-```shell
-willy-wonka search -k /Users/crisp/.config/solana/id.json -u https://api.devnet.solana.com "pixel dude*"
-```
-2) Check when it drops
-```shell
- willy-wonka wen -k /Users/crisp/.config/solana/id.json -u https://api.devnet.solana.com G5kxQtRjE9saZruweUbbwHhaJi4okRoxbGNQVrh94oCN
-```
-3) Start minting scripts ~X minutes before drop
-```shell
-willy-wonka mint -k /Users/crisp/.config/solana/id.json -u https://api.devnet.solana.com G5kxQtRjE9saZruweUbbwHhaJi4okRoxbGNQVrh94oCN
-```
+## Running
+
+* `yarn start search -k ~/.config/solana/id.json "Degen"`
+* All machines will be written to `machines.json`
+* Matches will be at the start of the file and printed to the cli
+
+### Search just V2 Candy Machines
+
+* `yarn start search -k ~/.config/solana/id.json --no-v1 "Degen"`

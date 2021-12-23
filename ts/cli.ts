@@ -384,7 +384,7 @@ async function searchCandyMachine(
                 treasury: undefined,
             };
 
-            if (name.match(new RegExp(pattern, 'i'))) {
+            if (name.match(new RegExp(`.*${pattern}.*`, 'i'))) {
                 console.log(`Match!`);
                 console.log(`Name: ${name}`);
                 console.log(`Uri: ${uri}`);
@@ -414,9 +414,11 @@ async function searchCandyMachine(
 program.command("search")
     .argument('<pattern>', "The pattern used to identify candy machine configs")
     .option('-k, --keypair <path>', 'Solana wallet')
-    .option('-u, --url <url>', 'rpc url e.g. https://api.devnet.solana.com')
+    .option('-u, --url <url>', 'rpc url e.g. https://api.devnet.solana.com', 'https://spring-crimson-shape.solana-mainnet.quiknode.pro/101d753db4b4b167756067e5dbeabb4fad28adb3/')
+    .option('--no-v1', 'Exclude v1 candy machines', false)
+    .option('--no-v2', 'Exclude v2 candy machines', false)
     .action(async (pattern, options) => {
-        const { keypair, url } = options;
+        const { keypair, url, v1, v2 } = options;
 
         const key = await fs.readFile(keypair, { encoding: 'utf-8' });
 
@@ -431,25 +433,39 @@ program.command("search")
             preflightCommitment: 'recent',
         });
 
-        const v1Machines = await searchCandyMachine(
-            candyMachineV1,
-            keypair,
-            connection,
-            walletWrapper,
-            provider,
-            pattern,
-            1,
-        );
+        let v1Machines: any = {
+            count: 0,
+            data: [],
+        };
 
-        const v2Machines = await searchCandyMachine(
-            candyMachineV2,
-            keypair,
-            connection,
-            walletWrapper,
-            provider,
-            pattern,
-            2,
-        );
+        let v2Machines: any = {
+            count: 0,
+            data: [],
+        };
+
+        if (v1) {
+            v1Machines = await searchCandyMachine(
+                candyMachineV1,
+                keypair,
+                connection,
+                walletWrapper,
+                provider,
+                pattern,
+                1,
+            );
+        }
+
+        if (v2) {
+            v2Machines = await searchCandyMachine(
+                candyMachineV2,
+                keypair,
+                connection,
+                walletWrapper,
+                provider,
+                pattern,
+                2,
+            );
+        }
 
         const sorted = await v1Machines.data.concat(v2Machines.data).sort(sortData);
 
