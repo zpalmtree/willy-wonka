@@ -368,10 +368,12 @@ async function searchCandyMachine(
             continue;
         }
 
-        for (let i = 0; i < Math.min(numberOfItems, 1); i++) {
+        let obj;
+
+        for (let i = 0; i < numberOfItems; i++) {
             const [name, uri] = unpackFunc(i, config);
 
-            const obj = {
+            obj = {
                 candyAddress: candyMachine.publicKey.toString(),
                 exampleItem: name,
                 exampleMetadata: uri,
@@ -397,12 +399,13 @@ async function searchCandyMachine(
                 obj.candyConfig = loadedCandyMachine.authority.toString();
                 obj.match = true;
                 obj.treasury = loadedCandyMachine.wallet.toString();
+                break;
             } else {
                 obj.match = false;
             }
-
-            data.push(obj);
         }
+
+        data.push(obj);
     }
 
     return {
