@@ -358,8 +358,8 @@ async function searchCandyMachine(
     for (let candyMachine of candyMachines) {
         const numberOfItems = candyMachine.account.data.itemsAvailable.toString();
         const price = candyMachine.account.data.price.toString();
-        const date = candyMachine.account.data.goLiveData
-            ? new Date(candyMachine.account.data.goLiveData.toString() * 1000)
+        const date = candyMachine.account.data.goLiveDate
+            ? new Date(candyMachine.account.data.goLiveDate.toString() * 1000)
             : 'Not Set';
 
         const config = configMap.get(`${candyMachine.account.authority.toString()}-${candyMachine.account.data.uuid}`);
@@ -384,13 +384,13 @@ async function searchCandyMachine(
                 date,
                 candyConfig: undefined,
                 treasury: undefined,
+                gatekeeper: false,
             };
 
             if (name.match(new RegExp(`.*${pattern}.*`, 'i'))) {
                 console.log(`Match!`);
                 console.log(`Name: ${name}`);
                 console.log(`Uri: ${uri}`);
-                console.log(`Candy Machine Public Key: ${candyMachine.publicKey.toString()}`);
 
                 const loadedCandyMachine: any = await candyProgram.account.candyMachine.fetch(
                     candyMachine.publicKey,
@@ -399,6 +399,19 @@ async function searchCandyMachine(
                 obj.candyConfig = loadedCandyMachine.authority.toString();
                 obj.match = true;
                 obj.treasury = loadedCandyMachine.wallet.toString();
+                obj.gatekeeper = loadedCandyMachine.data.gatekeeper !== null;
+
+                if (price <= 0.01 * LAMPORTS_PER_SOL && date.valueOf() < new Date().valueOf() && !obj.gatekeeper) {
+                    const env = 
+                        `\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}\n` +
+                        `REACT_APP_CANDY_MACHINE_ID=${obj.candyAddress}\n` +
+                        `REACT_APP_TREASURY_ADDRESS=${obj.treasury}\n` +
+                        `REACT_APP_SOLANA_NETWORK=mainnet-beta\n` +
+                        `REACT_APP_SOLANA_RPC_HOST=https://spring-crimson-shape.solana-mainnet.quiknode.pro/101d753db4b4b167756067e5dbeabb4fad28adb3/\n`;
+
+                    console.log(env);
+                }
+
                 break;
             } else {
                 obj.match = false;
