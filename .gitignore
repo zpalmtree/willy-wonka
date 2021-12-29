@@ -1,5 +1,4 @@
 .idea
-ts/build
-ts/node_modules
-ts/yarn.lock
+build
+node_modules
 machines.json
