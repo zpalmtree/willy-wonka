@@ -396,14 +396,17 @@ async function searchCandyMachine(
                     candyMachine.publicKey,
                 );
 
-                obj.candyConfig = loadedCandyMachine.authority.toString();
+                obj.candyConfig = candyVersion === 1
+                    ? loadedCandyMachine.config
+                    : loadedCandyMachine.authority.toString();
+
                 obj.match = true;
                 obj.treasury = loadedCandyMachine.wallet.toString();
-                obj.gatekeeper = loadedCandyMachine.data.gatekeeper !== null;
+                obj.gatekeeper = loadedCandyMachine.data.gatekeeper !== undefined && loadedCandyMachine.data.gatekeeper !== null;
 
-                if (price <= 0.01 * LAMPORTS_PER_SOL && date.valueOf() < new Date().valueOf() && !obj.gatekeeper) {
+                if (price <= 0.01 * LAMPORTS_PER_SOL && date.valueOf() < new Date().valueOf() && !obj.gatekeeper && true) {
                     const env = 
-                        `\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}\n` +
+                        `\n\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}\n` +
                         `REACT_APP_CANDY_MACHINE_ID=${obj.candyAddress}\n` +
                         `REACT_APP_TREASURY_ADDRESS=${obj.treasury}\n` +
                         `REACT_APP_SOLANA_NETWORK=mainnet-beta\n` +

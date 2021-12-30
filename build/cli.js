@@ -302,16 +302,24 @@ function searchCandyMachine(programId, keypair, connection, walletWrapper, provi
                     gatekeeper: false,
                 };
                 if (name.match(new RegExp(`.*${pattern}.*`, 'i'))) {
+                    /*
                     console.log(`Match!`);
                     console.log(`Name: ${name}`);
                     console.log(`Uri: ${uri}`);
+                    */
                     const loadedCandyMachine = yield candyProgram.account.candyMachine.fetch(candyMachine.publicKey);
-                    obj.candyConfig = loadedCandyMachine.authority.toString();
+                    obj.candyConfig = loadedCandyMachine.config
+                        ? loadedCandyMachine.config
+                        : loadedCandyMachine.authority.toString();
                     obj.match = true;
                     obj.treasury = loadedCandyMachine.wallet.toString();
-                    obj.gatekeeper = loadedCandyMachine.data.gatekeeper !== null;
+                    obj.gatekeeper = loadedCandyMachine.data.gatekeeper !== undefined && loadedCandyMachine.data.gatekeeper !== null;
+                    if (obj.treasury === obj.candyConfig) {
+                        console.log('Treasury = candy config');
+                        break;
+                    }
                     if (price <= 0.01 * web3_js_1.LAMPORTS_PER_SOL && date.valueOf() < new Date().valueOf() && !obj.gatekeeper) {
-                        const env = `\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}\n` +
+                        const env = `\n\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}\n` +
                             `REACT_APP_CANDY_MACHINE_ID=${obj.candyAddress}\n` +
                             `REACT_APP_TREASURY_ADDRESS=${obj.treasury}\n` +
                             `REACT_APP_SOLANA_NETWORK=mainnet-beta\n` +
