@@ -397,14 +397,14 @@ async function searchCandyMachine(
                 );
 
                 obj.candyConfig = candyVersion === 1
-                    ? loadedCandyMachine.config
+                    ? loadedCandyMachine.config.toString()
                     : loadedCandyMachine.authority.toString();
 
                 obj.match = true;
                 obj.treasury = loadedCandyMachine.wallet.toString();
                 obj.gatekeeper = loadedCandyMachine.data.gatekeeper !== undefined && loadedCandyMachine.data.gatekeeper !== null;
 
-                if (price <= 0.01 * LAMPORTS_PER_SOL && date.valueOf() < new Date().valueOf() && !obj.gatekeeper && true) {
+                if (true) {
                     const env = 
                         `\n\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}\n` +
                         `REACT_APP_CANDY_MACHINE_ID=${obj.candyAddress}\n` +
