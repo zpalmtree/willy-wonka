@@ -413,7 +413,7 @@ async function searchCandyMachine(
                     }
 
                     if (whitelist.discountPrice) {
-                        obj.whitelist.discountPrice = formatSOL(obj.whitelist.discountPrice);
+                        obj.whitelist.discountPrice = formatSOL(whitelist.discountPrice);
                     }
                 }
 
