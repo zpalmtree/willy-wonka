@@ -8,7 +8,8 @@ Mint candy machine NFTs from your CLI. Use your preferred rpc provider. Avoid ra
 ## Running
 
 * `yarn start search -k ~/.config/solana/id.json "Degen"`
-* All machines will be written to `machines.json`
+* All machines will be written to `machines.json` and `machines.txt`.
+* `machines.json` is programmatical output, `machines.txt` is user friendly output
 * Matches will be at the start of the file and printed to the cli
 
 ### Search just V2 Candy Machines
