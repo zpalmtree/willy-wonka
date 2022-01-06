@@ -368,7 +368,7 @@ async function searchCandyMachine(
             continue;
         }
 
-        let obj;
+        let obj: any;
 
         for (let i = 0; i < numberOfItems; i++) {
             const [name, uri] = unpackFunc(i, config);
@@ -404,13 +404,32 @@ async function searchCandyMachine(
                 obj.treasury = loadedCandyMachine.wallet.toString();
                 obj.gatekeeper = loadedCandyMachine.data.gatekeeper !== undefined && loadedCandyMachine.data.gatekeeper !== null;
 
+                const whitelist = loadedCandyMachine.data.whitelistMintSettings;
+
+                if (whitelist) {
+                    obj.whitelist = {
+                        mintToken: whitelist.mint.toString(),
+                        presale: whitelist.presale,
+                    }
+
+                    if (whitelist.discountPrice) {
+                        obj.whitelist.discountPrice = formatSOL(obj.whitelist.discountPrice);
+                    }
+                }
+
                 if (true) {
-                    const env = 
-                        `\n\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}\n` +
-                        `REACT_APP_CANDY_MACHINE_ID=${obj.candyAddress}\n` +
-                        `REACT_APP_TREASURY_ADDRESS=${obj.treasury}\n` +
-                        `REACT_APP_SOLANA_NETWORK=mainnet-beta\n` +
-                        `REACT_APP_SOLANA_RPC_HOST=https://spring-crimson-shape.solana-mainnet.quiknode.pro/101d753db4b4b167756067e5dbeabb4fad28adb3/\n`;
+                    let env = 
+                        `\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}` +
+                        `\nREACT_APP_CANDY_MACHINE_ID=${obj.candyAddress}` +
+                        `\nREACT_APP_TREASURY_ADDRESS=${obj.treasury}` +
+                        `\nREACT_APP_SOLANA_NETWORK=mainnet-beta` +
+                        `\nREACT_APP_SOLANA_RPC_HOST=https://spring-crimson-shape.solana-mainnet.quiknode.pro/101d753db4b4b167756067e5dbeabb4fad28adb3/`;
+                    
+                    if (obj.whitelist && obj.whitelist.mintToken) {
+                        env += `\nREACT_APP_WHITELIST_MINT_TOKEN=${obj.whitelist.mintToken}`;
+                    }
+
+                    env += '\n\n\n';
 
                     console.log(env);
                 }
@@ -428,6 +447,59 @@ async function searchCandyMachine(
         data,
         count: candyMachines.length,
     };
+}
+
+async function writeData(filename: string, data: any[]) {
+    let output = '';
+
+    let stars = '*'.repeat(20);
+
+    for (const item of data) {
+        if (!item.match) {
+            continue;
+        }
+
+        let line = '';
+
+        line += `${stars}\n\n`;
+
+        line += `Name: ${item.exampleItem}\n`;
+        line += `Example Item: ${item.exampleMetadata}\n`;
+        line += `Item Price: ${item.price}\n`;
+        line += `Item Count: ${item.items}\n`;
+        line += `Mint Date: ${item.date}\n\n`;
+
+        line += `Candy Machine Version: ${item.candyMachineVersion}\n`;
+        line += `Captcha Protected: ${item.gatekeeper}\n`;
+
+        if (item.whitelist) {
+            line += `Presale: ${item.whitelist.presale}\n`;
+            line += `Whitelist Token: ${item.whitelist.mintToken}\n`;
+
+            if (item.whitelist.discountPrice) {
+                line += `Whitelist Discount Price: ${item.whitelist.discountPrice}\n`;
+            }
+        }
+
+        let env =
+            `\nREACT_APP_CANDY_MACHINE_CONFIG=${item.candyConfig}` +
+            `\nREACT_APP_CANDY_MACHINE_ID=${item.candyAddress}` +
+            `\nREACT_APP_TREASURY_ADDRESS=${item.treasury}` +
+            `\nREACT_APP_SOLANA_NETWORK=mainnet-beta` +
+            `\nREACT_APP_SOLANA_RPC_HOST=https://spring-crimson-shape.solana-mainnet.quiknode.pro/101d753db4b4b167756067e5dbeabb4fad28adb3/`;
+        
+        if (item.whitelist && item.whitelist.mintToken) {
+            env += `\nREACT_APP_WHITELIST_MINT_TOKEN=${item.whitelist.mintToken}`;
+        }
+
+        line += `${env}\n\n`;
+
+        output += line;
+    }
+
+    output += `${stars}`;
+
+    await fs.writeFile(filename, output, { encoding: 'utf8' });
 }
 
 program.command("search")
@@ -487,6 +559,8 @@ program.command("search")
         }
 
         const sorted = await v1Machines.data.concat(v2Machines.data).sort(sortData);
+
+        await writeData('machines.txt', sorted);
 
         await fs.writeFile('machines.json', JSON.stringify(sorted, null, 4), { encoding: 'utf8' });
     });

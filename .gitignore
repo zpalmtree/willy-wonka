@@ -2,3 +2,5 @@
 build
 node_modules
 machines.json
+machines.txt
+build/cli.js
