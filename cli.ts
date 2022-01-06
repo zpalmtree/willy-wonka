@@ -418,18 +418,7 @@ async function searchCandyMachine(
                 }
 
                 if (true) {
-                    let env = 
-                        `\nREACT_APP_CANDY_MACHINE_CONFIG=${obj.candyConfig}` +
-                        `\nREACT_APP_CANDY_MACHINE_ID=${obj.candyAddress}` +
-                        `\nREACT_APP_TREASURY_ADDRESS=${obj.treasury}` +
-                        `\nREACT_APP_SOLANA_NETWORK=mainnet-beta` +
-                        `\nREACT_APP_SOLANA_RPC_HOST=https://spring-crimson-shape.solana-mainnet.quiknode.pro/101d753db4b4b167756067e5dbeabb4fad28adb3/`;
-                    
-                    if (obj.whitelist && obj.whitelist.mintToken) {
-                        env += `\nREACT_APP_WHITELIST_MINT_TOKEN=${obj.whitelist.mintToken}`;
-                    }
-
-                    env += '\n\n\n';
+                    let env = `\nREACT_APP_CANDY_MACHINE_ID=${obj.candyAddress}\n\n\n`;
 
                     console.log(env);
                 }
@@ -481,16 +470,7 @@ async function writeData(filename: string, data: any[]) {
             }
         }
 
-        let env =
-            `\nREACT_APP_CANDY_MACHINE_CONFIG=${item.candyConfig}` +
-            `\nREACT_APP_CANDY_MACHINE_ID=${item.candyAddress}` +
-            `\nREACT_APP_TREASURY_ADDRESS=${item.treasury}` +
-            `\nREACT_APP_SOLANA_NETWORK=mainnet-beta` +
-            `\nREACT_APP_SOLANA_RPC_HOST=https://spring-crimson-shape.solana-mainnet.quiknode.pro/101d753db4b4b167756067e5dbeabb4fad28adb3/`;
-        
-        if (item.whitelist && item.whitelist.mintToken) {
-            env += `\nREACT_APP_WHITELIST_MINT_TOKEN=${item.whitelist.mintToken}`;
-        }
+        let env = `\nREACT_APP_CANDY_MACHINE_ID=${item.candyAddress}`;
 
         line += `${env}\n\n`;
 
