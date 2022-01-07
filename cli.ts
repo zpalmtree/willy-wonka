@@ -392,9 +392,16 @@ async function searchCandyMachine(
                 console.log(`Name: ${name}`);
                 console.log(`Uri: ${uri}`);
 
-                const loadedCandyMachine: any = await candyProgram.account.candyMachine.fetch(
-                    candyMachine.publicKey,
-                );
+                let loadedCandyMachine: any;
+
+                try {
+                    loadedCandyMachine = await candyProgram.account.candyMachine.fetch(
+                        candyMachine.publicKey,
+                    );
+                } catch (err) {
+                    console.log('Failed to fetch candy machine data!\n');
+                    break;
+                }
 
                 obj.candyConfig = candyVersion === 1
                     ? loadedCandyMachine.config.toString()
