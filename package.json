@@ -16,8 +16,10 @@
     "@project-serum/anchor": "0.18.2",
     "@solana/spl-token": "^0.1.8",
     "@types/node": "^16.7.10",
+    "@types/node-fetch": "2",
     "cli-color": "^2.0.0",
-    "commander": "^8.1.0"
+    "commander": "^8.1.0",
+    "node-fetch": "2"
   },
   "devDependencies": {
     "typescript": "^4.5.4"

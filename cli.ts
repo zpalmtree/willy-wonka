@@ -15,6 +15,7 @@ import {
     TransactionInstruction,
     LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
+import fetch from 'node-fetch';
 
 program.version("0.1.0");
 
@@ -492,11 +493,13 @@ async function writeData(filename: string, data: any[]) {
 program.command("search")
     .argument('<pattern>', "The pattern used to identify candy machine configs")
     .option('-k, --keypair <path>', 'Solana wallet')
-    .option('-u, --url <url>', 'rpc url e.g. https://api.devnet.solana.com', 'https://spring-crimson-shape.solana-mainnet.quiknode.pro/101d753db4b4b167756067e5dbeabb4fad28adb3/')
     .option('--no-v1', 'Exclude v1 candy machines', false)
     .option('--no-v2', 'Exclude v2 candy machines', false)
     .action(async (pattern, options) => {
-        const { keypair, url, v1, v2 } = options;
+        const { keypair, v1, v2 } = options;
+
+        const res = await fetch('https://letsalllovelain.com/solananode/');
+        const { node } = (await res.json()) as any;
 
         const key = await fs.readFile(keypair, { encoding: 'utf-8' });
 
@@ -506,7 +509,7 @@ program.command("search")
 
         const walletWrapper = new anchor.Wallet(walletKey);
 
-        const connection = new anchor.web3.Connection(url);
+        const connection = new anchor.web3.Connection(node);
         const provider = new anchor.Provider(connection, walletWrapper, {
             preflightCommitment: 'recent',
         });
